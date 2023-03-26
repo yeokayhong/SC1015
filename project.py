@@ -50,8 +50,7 @@ for column in grade_data.columns:
     plt.show()
 # %%
 
-# keep only "Walc", "sex", "Parents_edu" and "Score" columns from grade_data
-grade_data.drop(["romantic", "reason", "absences"], axis=1, inplace=True)
+grade_data.drop(["romantic", "absences", "reason"], axis=1, inplace=True)
 
 # %%
 grade_data["sex"] = grade_data["sex"].apply(lambda x: 1 if x == "M" else 0)
@@ -91,4 +90,26 @@ print("FNR Train :\t", (fnTrain/(tpTrain + fnTrain)))
 seaborn.heatmap(confusion_matrix(y_train, y_train_pred), 
            annot = True, fmt=".0f", annot_kws={"size": 18})
 
+# %%
+y_test_pred = classifier.predict(x_test)
+
+print("Train Data")
+print("Accuracy  :\t", classifier.score(x_test, y_test))
+print()
+
+cmTrain = confusion_matrix(y_test, y_test_pred)
+tpTrain = cmTrain[1][1] # True Positives : Good (1) predicted Good (1)
+fpTrain = cmTrain[0][1] # False Positives : Bad (0) predicted Good (1)
+tnTrain = cmTrain[0][0] # True Negatives : Bad (0) predicted Bad (0)
+fnTrain = cmTrain[1][0] # False Negatives : Good (1) predicted Bad (0)
+
+print("TPR Train :\t", (tpTrain/(tpTrain + fnTrain)))
+print("TNR Train :\t", (tnTrain/(tnTrain + fpTrain)))
+print()
+
+print("FPR Train :\t", (fpTrain/(tnTrain + fpTrain)))
+print("FNR Train :\t", (fnTrain/(tpTrain + fnTrain)))
+
+seaborn.heatmap(confusion_matrix(y_test, y_test_pred), 
+           annot = True, fmt=".0f", annot_kws={"size": 18})
 # %%
