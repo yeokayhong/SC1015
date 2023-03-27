@@ -11,24 +11,34 @@ bike_data = pandas.read_csv("data/all_bikez_curated.csv")
 
 bike_data = bike_data[bike_data["Power (hp)"].notnull()]
 bike_data["Stroke (mm)"] = bike_data["Stroke (mm)"].apply(lambda x: x.replace(",", "") if type(x) != float else x).astype("float64")
-bike_data = bike_data.drop()
+bike_data = bike_data.drop(["Model", "Fuel system", "Front brakes", "Rear brakes", "Front tire", "Rear tire", "Front suspension", "Rear suspension", "Color options"], axis=1)
 
 bike_data.info()
 bike_data.describe()
 
 # %%
 # create a grid of plots
-fig, axes = plt.subplots(nrows=5, ncols=6, figsize=(10, 10))
+fig, axes = plt.subplots(nrows=8, ncols=1, figsize=(10, 25))
+plt.tight_layout()
+index = 0
 for column in bike_data.columns:
     try:
-        if bike_data[column].dtype == "int64" or bike_data[column].dtype == "float64":
-            # seaborn.violinplot(data = bike_data[column])
-            seaborn.violinplot(data = bike_data[column], ax=axes.flatten()[bike_data.columns.get_loc(column)], title=column)
-        else:
-            # seaborn.histplot(data = bike_data[column])
-            seaborn.histplot(data = bike_data[column], ax=axes.flatten()[bike_data.columns.get_loc(column)], title=column)
-        plt.show()
-    except:
-        print(f"{bike_data[column]} {bike_data[column].dtype}")
-# plt.show()
+        row = index // 1
+        col = index % 1
+        if bike_data[column].dtype == "object":
+            seaborn.boxplot(data = bike_data, x=column, y="Power (hp)", ax=axes[row], order = bike_data.groupby(column)["Power (hp)"].median().sort_values().index)
+            index += 1
+        # plt.show()
+    except Exception as e:
+        print(e)
+        print(f"{column} {bike_data[column].dtype}")
+plt.show()
 
+
+# %%
+seaborn.pairplot(bike_data, x_vars="Power (hp)")
+plt.show()
+
+print(bike_data.corr(numeric_only=True)["Power (hp)"].sort_values(ascending=False))
+
+# %%
