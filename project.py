@@ -3,6 +3,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn
 import pandas
 
@@ -18,7 +19,7 @@ grade_data["goout"] = grade_data["goout"].astype("category")
 grade_data["Parents_edu"] = grade_data["Parents_edu"].astype("category")
 grade_data["reason"] = grade_data["reason"].astype("category")
 grade_data["Grade"] = grade_data["G3"].apply(lambda x: 1 if x >= 15 else 2 if x >= 10 else 3 if x >= 5 else 4 if x >= 0 else "E")
-grade_data = grade_data.drop("G3", axis=1)
+grade_data = grade_data.drop(["G3", "Pass"], axis=1)
 
 grade_data.info()
 grade_data.describe()
@@ -33,8 +34,6 @@ for column in grade_data.columns:
 grade_data = grade_data[grade_data["absences"] != 4]
 grade_data = grade_data[grade_data["absences"] != 2]
 grade_data = grade_data[grade_data["absences"] != 6]
-
-grade_data = grade_data.drop("Pass", axis=1)
 
 grade_data = grade_data[grade_data["goout"] != "1"]
 
@@ -66,7 +65,31 @@ y = grade_data["Grade"]
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
 # %%
 # use random forest regressor to predict the score
-classifier = RandomForestClassifier(n_estimators = 256, max_depth = 8)
+# Import GridSearch for hyperparameter tuning using Cross-Validation (CV)
+from sklearn.model_selection import GridSearchCV
+
+# Define the Hyper-parameter Grid to search on, in case of Random Forest
+param_grid = {'n_estimators': np.arange(100,1001,100),   # number of trees 100, 200, ..., 1000
+              'max_depth': np.arange(2, 11)}             # depth of trees 2, 3, 4, 5, ..., 10
+
+# Create the Hyper-parameter Grid
+hpGrid = GridSearchCV(RandomForestClassifier(),   # the model family
+                      param_grid,                 # the search grid
+                      cv = 5,                     # 5-fold cross-validation
+                      scoring = 'accuracy')       # score to evaluate
+
+# Train the models using Cross-Validation
+hpGrid.fit(x_train, y_train.ravel())
+
+# Fetch the best Model or the best set of Hyper-parameters
+print(hpGrid.best_estimator_)
+
+# Print the score (accuracy) of the best Model after CV
+print(np.abs(hpGrid.best_score_))
+
+# %%
+
+classifier = RandomForestClassifier(n_estimators = 600, max_depth = 4)
 classifier.fit(x_train, y_train.ravel())
 y_train_pred = classifier.predict(x_train)
 
