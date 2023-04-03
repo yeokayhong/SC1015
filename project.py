@@ -1,8 +1,11 @@
 # %%
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import confusion_matrix
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
+from sklearn.svm import SVR
+import numpy as np
 import seaborn
 import pandas
 
@@ -37,7 +40,6 @@ for column in bike_data.columns:
         print(f"{column} {bike_data[column].dtype}")
 plt.show()
 
-
 # %%
 seaborn.pairplot(bike_data, x_vars="Power (hp)")
 plt.show()
@@ -49,7 +51,81 @@ print(bike_data.corr()["Power (hp)"].sort_values(ascending=False))
 bike_data = pandas.get_dummies(bike_data, columns=["Cooling system"], prefix=["Cooling system"])
 bike_data = bike_data.reset_index(drop=True)
 
-x = bike_data.loc[:, ["Cooling system_Air", "Cooling system_Liquid", "Cooling system_Oil & air", "Torque (Nm)", "Displacement (ccm)"]]
+x = bike_data.loc[:, ["Torque (Nm)", "Displacement (ccm)"]]
 y = bike_data["Power (hp)"]
+
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+
+# %%
+model = LinearRegression()
+model.fit(x_train, y_train)
+y_train_pred = model.predict(x_train)
+
+# print the accuracy
+print("Train Data")
+print("Accuracy  :\t", model.score(x_train, y_train))
+print("MSE       :\t", mean_squared_error(y_train, y_train_pred))
+print()
+
+# plot the predicted values against the actual values
+plt.scatter(y_train, y_train_pred)
+plt.xlabel("Actual Power (hp)")
+plt.ylabel("Predicted Power (hp)")
+plt.show()
+
+# %%
+y_test_pred = model.predict(x_test)
+
+# print the accuracy
+print("Test Data")
+print("Accuracy  :\t", model.score(x_test, y_test))
+print("MSE       :\t", mean_squared_error(y_test, y_test_pred))
+print()
+
+# plot the predicted values against the actual values
+plt.scatter(y_test, y_test_pred)
+plt.xlabel("Actual Power (hp)")
+plt.ylabel("Predicted Power (hp)")
+plt.show()
+
+# %%
+sc_x = StandardScaler()
+sc_y = StandardScaler()
+scaled_x_train = sc_x.fit_transform(x_train)
+scaled_y_train = sc_y.fit_transform(y_train.values.reshape(-1, 1))
+regressor = SVR(kernel = 'rbf')
+regressor.fit(scaled_x_train, scaled_y_train)
+
+y_train_pred = sc_y.inverse_transform(regressor.predict(scaled_x_train).reshape(-1,1))
+
+# plt predicted versus actual y
+plt.scatter(y_train, y_train_pred)
+plt.xlabel("Actual Power (hp)")
+plt.ylabel("Predicted Power (hp)")
+plt.show()
+
+# print the accuracy
+print("Train Data")
+print("Accuracy  :\t", regressor.score(scaled_x_train, scaled_y_train))
+print("MSE       :\t", mean_squared_error(y_train, y_train_pred))
+print()
+
+# %%
+scaled_x_test = sc_x.fit_transform(x_test)
+scaled_y_test = sc_y.fit_transform(y_test.values.reshape(-1, 1))
+
+y_test_pred = sc_y.inverse_transform(regressor.predict(scaled_x_test).reshape(-1,1))
+
+# plt predicted versus actual y
+plt.scatter(y_test, y_test_pred)
+plt.xlabel("Actual Power (hp)")
+plt.ylabel("Predicted Power (hp)")
+plt.show()
+
+# print the accuracy
+print("Test Data")
+print("Accuracy  :\t", regressor.score(scaled_x_test, scaled_y_test))
+print("MSE       :\t", mean_squared_error(y_test, y_test_pred))
+print()
 
 # %%
