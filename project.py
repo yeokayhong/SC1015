@@ -1,131 +1,230 @@
 # %%
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import confusion_matrix
+from sklearn.pipeline import make_pipeline
 import matplotlib.pyplot as plt
-from sklearn.svm import SVR
+from sklearn.svm import SVC
 import numpy as np
 import seaborn
 import pandas
 
 # %%
-bike_data = pandas.read_csv("data/all_bikez_curated.csv")
+heart_data = pandas.read_csv("data/heart.csv")
 
-bike_data = bike_data[bike_data["Power (hp)"].notnull()]
-bike_data["Stroke (mm)"] = bike_data["Stroke (mm)"].apply(lambda x: x.replace(",", "") if type(x) != float else x).astype("float64")
-bike_data = bike_data.drop(["Model", "Fuel system", "Front brakes", "Rear brakes", "Front tire", "Rear tire", "Front suspension", "Rear suspension", "Color options"], axis=1)
-bike_data = bike_data[bike_data["Torque (Nm)"].notnull()]
-bike_data = bike_data[bike_data["Displacement (ccm)"].notnull()]
-bike_data = bike_data[bike_data["Cooling system"].notnull()]
+heart_data["ExerciseAngina"] = heart_data["ExerciseAngina"].apply(lambda x: 1 if x == "Y" else 0).astype("object")
+heart_data["FastingBS"] = heart_data["FastingBS"].astype("object")
 
-bike_data.info()
-bike_data.describe()
+heart_data.info()
+heart_data.describe()
 
 # %%
-# create a grid of plots
-fig, axes = plt.subplots(nrows=8, ncols=1, figsize=(10, 25))
-plt.tight_layout()
-index = 0
-for column in bike_data.columns:
-    try:
-        row = index // 1
-        col = index % 1
-        if bike_data[column].dtype == "object":
-            seaborn.boxplot(data = bike_data, x=column, y="Power (hp)", ax=axes[row], order = bike_data.groupby(column)["Power (hp)"].median().sort_values().index)
-            index += 1
-        # plt.show()
-    except Exception as e:
-        print(e)
-        print(f"{column} {bike_data[column].dtype}")
-plt.show()
+def autopct_format(values):
+    def my_format(pct):
+        total = sum(values)
+        val = int(round(pct*total/100.0))
+        return '{:.1f}%\n({v:d})'.format(pct, v=val)
+    return my_format
+
+colours = {0: 'C0',
+           1: 'C1'}
+
+for column in heart_data.columns:
+    if column == "HeartDisease":
+        continue
+    if (heart_data[column].dtype not in ["object", "category", "bool"]):
+        seaborn.violinplot(x = "HeartDisease", y = column, data = heart_data)
+    else:
+        print(column)
+        # plot a pie chart for each category of the column based on whether they have stroke
+        for category in heart_data[column].unique():
+            data = heart_data[heart_data[column] == category]
+            count = data["HeartDisease"].value_counts()
+            plt.pie(count, labels=count.index, colors=[colours[key] for key in count.index], autopct=autopct_format(count))
+            plt.title(category)
+            plt.show()
+        plt.show()
+    # seaborn.catplot(x=columns, y="Score", data=grade_data, kind="violin")
+    plt.show()
 
 # %%
-seaborn.pairplot(bike_data, x_vars="Power (hp)")
-plt.show()
+x = heart_data.loc[:, ["Sex", "ChestPainType", "Cholesterol", "FastingBS", "ExerciseAngina", "Oldpeak", "ST_Slope"]]
+y = heart_data["HeartDisease"]
 
-print(bike_data.corr()["Power (hp)"].sort_values(ascending=False))
-
-# %%
-# one hot encode Cooling System
-bike_data = pandas.get_dummies(bike_data, columns=["Cooling system"], prefix=["Cooling system"])
-bike_data = bike_data.reset_index(drop=True)
-
-x = bike_data.loc[:, ["Torque (Nm)", "Displacement (ccm)"]]
-y = bike_data["Power (hp)"]
+x = pandas.get_dummies(x, columns=["Sex", "ChestPainType", "ST_Slope"])
 
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
 
 # %%
-model = LinearRegression()
-model.fit(x_train, y_train)
-y_train_pred = model.predict(x_train)
+from sklearn.model_selection import GridSearchCV
 
-# print the accuracy
+# Define the Hyper-parameter Grid to search on, in case of Random Forest
+param_grid = {'n_estimators': np.arange(100,1001,100),   # number of trees 100, 200, ..., 1000
+              'max_depth': np.arange(2, 11)}             # depth of trees 2, 3, 4, 5, ..., 10
+
+# Create the Hyper-parameter Grid
+hpGrid = GridSearchCV(RandomForestClassifier(),   # the model family
+                      param_grid,                 # the search grid
+                      cv = 5,                     # 5-fold cross-validation
+                      scoring = 'accuracy')       # score to evaluate
+
+# Train the models using Cross-Validation
+hpGrid.fit(x_train, y_train.ravel())
+
+# Fetch the best Model or the best set of Hyper-parameters
+print(hpGrid.best_estimator_)
+
+# Print the score (accuracy) of the best Model after CV
+print(np.abs(hpGrid.best_score_))
+
+# print the best hyperparameters
+print(hpGrid.best_params_)
+
+# %%
+classifier = RandomForestClassifier(max_depth=5, n_estimators = 100)
+classifier.fit(x_train, y_train)
+y_train_pred = classifier.predict(x_train)
+
 print("Train Data")
-print("Accuracy  :\t", model.score(x_train, y_train))
-print("MSE       :\t", mean_squared_error(y_train, y_train_pred))
+print("Accuracy  :\t", classifier.score(x_train, y_train))
 print()
 
-# plot the predicted values against the actual values
-plt.scatter(y_train, y_train_pred)
-plt.xlabel("Actual Power (hp)")
-plt.ylabel("Predicted Power (hp)")
+cmTrain = confusion_matrix(y_train, y_train_pred)
+tpTrain = cmTrain[1][1] # True Positives : Good (1) predicted Good (1)
+fpTrain = cmTrain[0][1] # False Positives : Bad (0) predicted Good (1)
+tnTrain = cmTrain[0][0] # True Negatives : Bad (0) predicted Bad (0)
+fnTrain = cmTrain[1][0] # False Negatives : Good (1) predicted Bad (0)
+
+print("TPR Train :\t", (tpTrain/(tpTrain + fnTrain)))
+print("TNR Train :\t", (tnTrain/(tnTrain + fpTrain)))
+print()
+
+print("FPR Train :\t", (fpTrain/(tnTrain + fpTrain)))
+print("FNR Train :\t", (fnTrain/(tpTrain + fnTrain)))
+
+# clear plot
+plt.clf()
+seaborn.heatmap(confusion_matrix(y_train, y_train_pred), 
+           annot = True, fmt=".0f", annot_kws={"size": 18})
 plt.show()
 
 # %%
-y_test_pred = model.predict(x_test)
+y_test_pred = classifier.predict(x_test)
 
-# print the accuracy
 print("Test Data")
-print("Accuracy  :\t", model.score(x_test, y_test))
-print("MSE       :\t", mean_squared_error(y_test, y_test_pred))
+print("Accuracy  :\t", classifier.score(x_test, y_test))
 print()
 
-# plot the predicted values against the actual values
-plt.scatter(y_test, y_test_pred)
-plt.xlabel("Actual Power (hp)")
-plt.ylabel("Predicted Power (hp)")
-plt.show()
+cmTrain = confusion_matrix(y_test, y_test_pred)
+tpTrain = cmTrain[1][1] # True Positives : Good (1) predicted Good (1)
+fpTrain = cmTrain[0][1] # False Positives : Bad (0) predicted Good (1)
+tnTrain = cmTrain[0][0] # True Negatives : Bad (0) predicted Bad (0)
+fnTrain = cmTrain[1][0] # False Negatives : Good (1) predicted Bad (0)
+
+print("TPR Train :\t", (tpTrain/(tpTrain + fnTrain)))
+print("TNR Train :\t", (tnTrain/(tnTrain + fpTrain)))
+print()
+
+print("FPR Train :\t", (fpTrain/(tnTrain + fpTrain)))
+print("FNR Train :\t", (fnTrain/(tpTrain + fnTrain)))
+
+seaborn.heatmap(confusion_matrix(y_test, y_test_pred), 
+           annot = True, fmt=".0f", annot_kws={"size": 18})
 
 # %%
-sc_x = StandardScaler()
-sc_y = StandardScaler()
-scaled_x_train = sc_x.fit_transform(x_train)
-scaled_y_train = sc_y.fit_transform(y_train.values.reshape(-1, 1))
-regressor = SVR(kernel = 'rbf')
-regressor.fit(scaled_x_train, scaled_y_train)
+clf = make_pipeline(StandardScaler(), SVC(gamma='auto'))
+clf.fit(x_train, y_train)
+y_train_pred = clf.predict(x_train)
 
-y_train_pred = sc_y.inverse_transform(regressor.predict(scaled_x_train).reshape(-1,1))
+cmTrain = confusion_matrix(y_train, y_train_pred)
+tpTrain = cmTrain[1][1] # True Positives : Good (1) predicted Good (1)
+fpTrain = cmTrain[0][1] # False Positives : Bad (0) predicted Good (1)
+tnTrain = cmTrain[0][0] # True Negatives : Bad (0) predicted Bad (0)
+fnTrain = cmTrain[1][0] # False Negatives : Good (1) predicted Bad (0)
 
-# plt predicted versus actual y
-plt.scatter(y_train, y_train_pred)
-plt.xlabel("Actual Power (hp)")
-plt.ylabel("Predicted Power (hp)")
-plt.show()
-
-# print the accuracy
 print("Train Data")
-print("Accuracy  :\t", regressor.score(scaled_x_train, scaled_y_train))
-print("MSE       :\t", mean_squared_error(y_train, y_train_pred))
+print("Accuracy  :\t", clf.score(x_train, y_train))
+
+print("TPR Train :\t", (tpTrain/(tpTrain + fnTrain)))
+print("TNR Train :\t", (tnTrain/(tnTrain + fpTrain)))
 print()
 
-# %%
-scaled_x_test = sc_x.fit_transform(x_test)
-scaled_y_test = sc_y.fit_transform(y_test.values.reshape(-1, 1))
+print("FPR Train :\t", (fpTrain/(tnTrain + fpTrain)))
+print("FNR Train :\t", (fnTrain/(tpTrain + fnTrain)))
 
-y_test_pred = sc_y.inverse_transform(regressor.predict(scaled_x_test).reshape(-1,1))
-
-# plt predicted versus actual y
-plt.scatter(y_test, y_test_pred)
-plt.xlabel("Actual Power (hp)")
-plt.ylabel("Predicted Power (hp)")
+seaborn.heatmap(confusion_matrix(y_train, y_train_pred), annot = True, fmt=".0f", annot_kws={"size": 18})
 plt.show()
 
-# print the accuracy
+# %%
+y_test_pred = clf.predict(x_test)
+
+cmTrain = confusion_matrix(y_test, y_test_pred)
+tpTrain = cmTrain[1][1] # True Positives : Good (1) predicted Good (1)
+fpTrain = cmTrain[0][1] # False Positives : Bad (0) predicted Good (1)
+tnTrain = cmTrain[0][0] # True Negatives : Bad (0) predicted Bad (0)
+fnTrain = cmTrain[1][0] # False Negatives : Good (1) predicted Bad (0)
+
 print("Test Data")
-print("Accuracy  :\t", regressor.score(scaled_x_test, scaled_y_test))
-print("MSE       :\t", mean_squared_error(y_test, y_test_pred))
+print("Accuracy  :\t", clf.score(x_test, y_test))
+
+print("TPR Train :\t", (tpTrain/(tpTrain + fnTrain)))
+print("TNR Train :\t", (tnTrain/(tnTrain + fpTrain)))
 print()
+
+print("FPR Train :\t", (fpTrain/(tnTrain + fpTrain)))
+print("FNR Train :\t", (fnTrain/(tpTrain + fnTrain)))
+
+seaborn.heatmap(confusion_matrix(y_test, y_test_pred), annot = True, fmt=".0f", annot_kws={"size": 18})
+plt.show()
+
+# %%
+clf = LogisticRegression(random_state=0, max_iter=1000).fit(x, y)
+
+y_train_pred = clf.predict(x_train)
+y_train_proba = clf.predict_proba(x_train)
+
+cmTrain = confusion_matrix(y_train, y_train_pred)
+tpTrain = cmTrain[1][1] # True Positives : Good (1) predicted Good (1)
+fpTrain = cmTrain[0][1] # False Positives : Bad (0) predicted Good (1)
+tnTrain = cmTrain[0][0] # True Negatives : Bad (0) predicted Bad (0)
+fnTrain = cmTrain[1][0] # False Negatives : Good (1) predicted Bad (0)
+
+print("Train Data")
+print("Accuracy  :\t", clf.score(x_train, y_train))
+
+print("TPR Train :\t", (tpTrain/(tpTrain + fnTrain)))
+print("TNR Train :\t", (tnTrain/(tnTrain + fpTrain)))
+print()
+
+print("FPR Train :\t", (fpTrain/(tnTrain + fpTrain)))
+print("FNR Train :\t", (fnTrain/(tpTrain + fnTrain)))
+
+seaborn.heatmap(confusion_matrix(y_train, y_train_pred), annot = True, fmt=".0f", annot_kws={"size": 18})
+plt.show()
+
+# print(clf.predict_proba(x.iloc[-2:, :]))
+# %%
+y_test_pred = clf.predict(x_test)
+
+cmTrain = confusion_matrix(y_test, y_test_pred)
+tpTrain = cmTrain[1][1] # True Positives : Good (1) predicted Good (1)
+fpTrain = cmTrain[0][1] # False Positives : Bad (0) predicted Good (1)
+tnTrain = cmTrain[0][0] # True Negatives : Bad (0) predicted Bad (0)
+fnTrain = cmTrain[1][0] # False Negatives : Good (1) predicted Bad (0)
+
+print("Test Data")
+print("Accuracy  :\t", clf.score(x_test, y_test))
+
+print("TPR Train :\t", (tpTrain/(tpTrain + fnTrain)))
+print("TNR Train :\t", (tnTrain/(tnTrain + fpTrain)))
+print()
+
+print("FPR Train :\t", (fpTrain/(tnTrain + fpTrain)))
+print("FNR Train :\t", (fnTrain/(tpTrain + fnTrain)))
+
+seaborn.heatmap(confusion_matrix(y_test, y_test_pred), annot = True, fmt=".0f", annot_kws={"size": 18})
+plt.show()
 
 # %%
