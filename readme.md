@@ -37,6 +37,6 @@ From the dataset, we have 6 predictors and 1 response variable
   - Set the scoring to be `recall` instead of the default `accuracy` to maximize true positive rates
   - Searched for the optimal `class_weight` to use for each model to maximize the recall score
 
-**Model Evaluations**: We are primarily concerned with the true positive rates for our models, however, we also need to keep an eye out for overall accuracy and true negative rates. So for all models, we calculated the confusion matrix and plotted them on a heatmap.
-
-For the Logistic Regression model, as it returns probabilities as well, we plotted a violinplot for the distribution of the predicted probabilities against the actual label to better visualize the output.
+**Model Evaluations**
+- Calculated the confusion matrix and plotted them on a heatmap for all models
+- Plotted violinplot of predicted probabilities against actual label to visualize distribution of logistic regression probabilities
